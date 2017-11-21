@@ -23,8 +23,7 @@ as well as to verify your TL classifier.
 TODO (for Yousuf and Aaron): Stopline location for each traffic light.
 '''
 
-#LOOKAHEAD_WPS = 200 # Number of waypoints we will publish. You can change this number
-LOOKAHEAD_WPS = 1 # Number of waypoints we will publish. You can change this number
+LOOKAHEAD_WPS = 200 # Number of waypoints we will publish. You can change this number
 
 
 def angleDiff(a, b):
@@ -35,7 +34,6 @@ def angleDiff(a, b):
     if (diff < 0):
         diff += math.pi * 2.0;
     return diff - math.pi;
-
 
 
 class WaypointUpdater(object):
@@ -114,7 +112,6 @@ class WaypointUpdater(object):
         :return: Index of the closest waypoint
         '''
 
-        # TODO: This needs to only get waypoints _ahead_ of the car
         closestIndex = -1;
         closestDistSquared = 99999999;
 
