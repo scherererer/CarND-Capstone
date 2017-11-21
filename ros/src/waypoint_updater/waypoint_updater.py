@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 import rospy
+import tf
 from geometry_msgs.msg import PoseStamped
 from styx_msgs.msg import Lane, Waypoint
 from std_msgs.msg import Int32
@@ -22,14 +23,26 @@ as well as to verify your TL classifier.
 TODO (for Yousuf and Aaron): Stopline location for each traffic light.
 '''
 
-LOOKAHEAD_WPS = 200 # Number of waypoints we will publish. You can change this number
+#LOOKAHEAD_WPS = 200 # Number of waypoints we will publish. You can change this number
+LOOKAHEAD_WPS = 1 # Number of waypoints we will publish. You can change this number
+
+
+def angleDiff(a, b):
+    '''
+    Get the difference between two angles
+    '''
+    diff = math.fmod(b - a + math.pi, math.pi * 2.0);
+    if (diff < 0):
+        diff += math.pi * 2.0;
+    return diff - math.pi;
+
 
 
 class WaypointUpdater(object):
     def __init__(self):
-        rospy.init_node('waypoint_updater')
+        rospy.init_node('waypoint_updater', log_level=rospy.DEBUG)
 
-        rospy.Subscriber('/current_pose', PoseStamped, self.pose_cb)
+        rospy.Subscriber('/current_pose', PoseStamped, self.pose_cb, queue_size=1)
         rospy.Subscriber('/base_waypoints', Lane, self.waypoints_cb)
 
         # TODO: Add a subscriber for /traffic_waypoint and /obstacle_waypoint below
@@ -40,7 +53,7 @@ class WaypointUpdater(object):
         self.final_waypoints_pub = rospy.Publisher('final_waypoints', Lane, queue_size=1)
 
         # TODO: Add other member variables you need below
-        self.waypoints = [];
+        self.base_waypoints = [];
 
         rospy.spin()
 
@@ -55,15 +68,15 @@ class WaypointUpdater(object):
         # Pass through the header info
         lane.header = msg.header
 
-        wpidx = self.find_closest_waypoint(self.waypoints, msg.pose);
+        wpidx = self.find_closest_waypoint(self.base_waypoints, msg.pose);
 
         for i in range (LOOKAHEAD_WPS):
-            lane.waypoints.append (self.waypoints[(wpidx + i) % len(self.waypoints)]);
+            lane.waypoints.append (self.base_waypoints[(wpidx + i) % len(self.base_waypoints)]);
 
         self.final_waypoints_pub.publish(lane);
 
     def waypoints_cb(self, waypoints):
-        self.waypoints = waypoints.waypoints;
+        self.base_waypoints = waypoints.waypoints;
 
     def traffic_cb(self, msg):
         # TODO: Callback for /traffic_waypoint message. Implement
@@ -102,14 +115,30 @@ class WaypointUpdater(object):
         '''
 
         # TODO: This needs to only get waypoints _ahead_ of the car
-        closestIndex = 0;
+        closestIndex = -1;
         closestDistSquared = 99999999;
 
         dsquared = lambda a, b: (a.x-b.x)**2 + (a.y-b.y)**2  + (a.z-b.z)**2;
+        calcAzimuth = lambda a, b: math.atan2(b.y-a.y, b.x-a.x);
         for i, wp in enumerate (waypoints):
-            testDistSquared = dsquared (wp.pose.pose.position, pose.position);
-            if (testDistSquared < closestDistSquared):
-                closestIndex = i;
+            # Is this waypoint the closest candidate?
+            testDistSquared = dsquared(wp.pose.pose.position, pose.position);
+            if (testDistSquared >= closestDistSquared):
+                continue;
+
+            # Is this waypoint in front of us?
+            vehicleToPointAzimuth = calcAzimuth(pose.position, wp.pose.pose.position);
+            quaternion = (pose.orientation.x, pose.orientation.y,
+                          pose.orientation.z, pose.orientation.w);
+            heading = tf.transformations.euler_from_quaternion(quaternion)[2]
+
+            if (math.fabs(angleDiff(vehicleToPointAzimuth, heading)) >= math.pi/2.0):
+                continue;
+
+            closestDistSquared = testDistSquared;
+            closestIndex = i;
+
+        assert(closestIndex >= 0);
 
         return closestIndex;
 
