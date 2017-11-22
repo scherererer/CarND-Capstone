@@ -43,15 +43,16 @@ class WaypointUpdater(object):
         rospy.Subscriber('/current_pose', PoseStamped, self.pose_cb, queue_size=1)
         rospy.Subscriber('/base_waypoints', Lane, self.waypoints_cb)
 
-        # TODO: Add a subscriber for /traffic_waypoint and /obstacle_waypoint below
         sub1 = rospy.Subscriber("/traffic_waypoint", Int32, self.traffic_cb)
         # Cruft?
         #sub1 = rospy.Subscriber("/obstacle_waypoint", message_type, self.obstacle_cb)
 
         self.final_waypoints_pub = rospy.Publisher('final_waypoints', Lane, queue_size=1)
 
-        # TODO: Add other member variables you need below
+        # Base list of waypoints
         self.base_waypoints = [];
+        # If the index is -1 then no detection has been made
+        self.redlightindex = -1;
 
         rospy.spin()
 
@@ -59,8 +60,6 @@ class WaypointUpdater(object):
         '''
         :param msg: Current position of the vehicle of type PoseStamped
         '''
-        # TODO: Implement
-
         lane = Lane();
 
         # Pass through the header info
@@ -71,14 +70,18 @@ class WaypointUpdater(object):
         for i in range (LOOKAHEAD_WPS):
             lane.waypoints.append (self.base_waypoints[(wpidx + i) % len(self.base_waypoints)]);
 
+        # TODO: Set speeds for waypoints
+        SPEED_LIMIT = rospy.get_param("/waypoint_loader/velocity");
+
         self.final_waypoints_pub.publish(lane);
 
     def waypoints_cb(self, waypoints):
         self.base_waypoints = waypoints.waypoints;
 
     def traffic_cb(self, msg):
-        # TODO: Callback for /traffic_waypoint message. Implement
-        pass
+        # This is the index of the nearest upcoming red light
+        # Used in pose_cb
+        self.redlightindex = msg.data;
 
     def obstacle_cb(self, msg):
         # TODO: Callback for /obstacle_waypoint message. We will implement it later
