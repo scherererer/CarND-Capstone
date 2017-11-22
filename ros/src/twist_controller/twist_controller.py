@@ -25,7 +25,7 @@ class Controller(object):
             vel_err *= 2
         
         accel = self.pidc.step(vel_err, dt)
-        steer = self.yawc.get_steering(cmd_vel, cmd_steer, current_vel)
+        steer = self.yawc.get_steering(current_vel, cmd_steer, current_vel)
         
         rospy.logwarn('curr_steer={:6.3f} cmd_steer={:6.3f} steer={:6.3f}'.format(
             current_steer, cmd_steer, steer))
@@ -35,7 +35,7 @@ class Controller(object):
         
         
         if (accel < 0):
-            brake_amount = accel * 10
+            brake_amount = accel * 100
             return 0, brake_amount, steer
         else:
             return accel, 0, steer

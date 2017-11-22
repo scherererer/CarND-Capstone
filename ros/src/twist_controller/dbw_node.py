@@ -47,9 +47,9 @@ class DBWNode(object):
         max_steer_angle = rospy.get_param('~max_steer_angle', 8.)
         
         # Tuning time!
-        kp = 0.0632701
-        ki = 0.00097335
-        kd = 3.68445
+        kp = 0.0632701      * 4
+        ki = 0.00097335     * 4
+        kd = 3.68445        * 4
         max_speed = 80
 
         self.steer_pub = rospy.Publisher('/vehicle/steering_cmd',
