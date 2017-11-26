@@ -3,8 +3,7 @@
 import rospy
 import tf
 from geometry_msgs.msg import PoseStamped
-from styx_msgs.msg import Lane, Waypoint
-from std_msgs.msg import Int32
+from styx_msgs.msg import Lane, TrafficWaypoint, Waypoint
 
 import math
 
@@ -43,7 +42,7 @@ class WaypointUpdater(object):
         rospy.Subscriber('/current_pose', PoseStamped, self.pose_cb, queue_size=1)
         rospy.Subscriber('/base_waypoints', Lane, self.waypoints_cb)
 
-        sub1 = rospy.Subscriber("/traffic_waypoint", Int32, self.traffic_cb)
+        sub1 = rospy.Subscriber("/traffic_waypoint", TrafficWaypoint, self.traffic_cb)
         # Cruft?
         #sub1 = rospy.Subscriber("/obstacle_waypoint", message_type, self.obstacle_cb)
 
@@ -81,7 +80,18 @@ class WaypointUpdater(object):
     def traffic_cb(self, msg):
         # This is the index of the nearest upcoming red light
         # Used in pose_cb
-        self.redlightindex = msg.data;
+        self.redlightindex = msg.index;
+
+        if msg.state == TrafficWaypoint.RED:
+            state = "red"
+        elif msg.state == TrafficWaypoint.YELLOW:
+            state = "yellow"
+        elif msg.state == TrafficWaypoint.GREEN:
+            state = "green"
+        else:
+            state = "unknown"
+
+        #rospy.logwarn('traffic light; waypoint: {}; state: {}'.format(msg.index, state))
 
     def obstacle_cb(self, msg):
         # TODO: Callback for /obstacle_waypoint message. We will implement it later
