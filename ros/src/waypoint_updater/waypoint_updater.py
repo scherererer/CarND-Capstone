@@ -2,7 +2,7 @@
 
 import rospy
 import tf
-from geometry_msgs.msg import PoseStamped
+from geometry_msgs.msg import PoseStamped, TwistStamped
 from styx_msgs.msg import Lane, TrafficWaypoint, Waypoint
 
 import math
@@ -40,6 +40,7 @@ class WaypointUpdater(object):
         rospy.init_node('waypoint_updater', log_level=rospy.DEBUG)
 
         rospy.Subscriber('/current_pose', PoseStamped, self.pose_cb, queue_size=1)
+        rospy.Subscriber('/current_velocity', TwistStamped, self.twist_cb, queue_size=1)
         rospy.Subscriber('/base_waypoints', Lane, self.waypoints_cb)
 
         sub1 = rospy.Subscriber("/traffic_waypoint", TrafficWaypoint, self.traffic_cb)
@@ -51,7 +52,10 @@ class WaypointUpdater(object):
         # Base list of waypoints
         self.base_waypoints = [];
         # If the index is -1 then no detection has been made
-        self.redlightindex = -1;
+        self.lightindex = -1;
+        self.lightstate = TrafficWaypoint.UNKNOWN;
+
+        self.lastvelocity = 0;
 
         rospy.spin()
 
@@ -64,15 +68,46 @@ class WaypointUpdater(object):
         # Pass through the header info
         lane.header = msg.header
 
-        wpidx = self.find_closest_waypoint(self.base_waypoints, msg.pose);
+        startwpindex = self.find_closest_waypoint(self.base_waypoints, msg.pose);
 
         for i in range (LOOKAHEAD_WPS):
-            lane.waypoints.append (self.base_waypoints[(wpidx + i) % len(self.base_waypoints)]);
+            lane.waypoints.append (self.base_waypoints[(startwpindex + i) % len(self.base_waypoints)]);
 
-        # TODO: Set speeds for waypoints
         SPEED_LIMIT = rospy.get_param("/waypoint_loader/velocity");
 
+        distanceToDest = 0;
+        targetVelocity = 0;
+        numwpts = self.lightindex - startwpindex if startwpindex <= self.lightindex else self.lightindex + len(self.base_waypoints) - startwpindex;
+
+        if (self.lightindex < 0 or self.lightstate == TrafficWaypoint.GREEN):
+            # Top Speed!
+            distanceToDest = self.distance(self.base_waypoints, startwpindex,
+                                           (startwpindex + 100) % len(self.base_waypoints));
+            targetVelocity = SPEED_LIMIT;
+        elif (numwpts < LOOKAHEAD_WPS and self.lightstate == TrafficWaypoint.RED):
+            # Account for slowdown
+            distanceToDest = self.distance(self.base_waypoints, startwpindex, self.lightindex);
+            targetVelocity = 0.0;
+        else:
+            # TODO: Allow running through a yellow light as long as it doesn't cause an abrupt stop
+            distanceToDest = self.distance(self.base_waypoints, startwpindex, self.lightindex);
+            targetVelocity = 0.0;
+
+        idealAccel = (targetVelocity**2 - self.lastvelocity**2) / (2 * distanceToDest);
+
+        v = self.lastvelocity;
+        dt = ((targetVelocity - self.lastvelocity) / idealAccel) / numwpts;
+
+        for i in range(len(lane.waypoints)):
+            v += idealAccel * dt;
+            self.set_waypoint_velocity(lane.waypoints, i, v);
+
+        rospy.logwarn('pose; v0 {}, vt {}, v_0 {}'.format(self.lastvelocity, targetVelocity, self.get_waypoint_velocity(lane.waypoints[0])))
+
         self.final_waypoints_pub.publish(lane);
+
+    def twist_cb(self, msg):
+        self.lastvelocity = msg.twist.linear.x;
 
     def waypoints_cb(self, waypoints):
         self.base_waypoints = waypoints.waypoints;
@@ -80,17 +115,17 @@ class WaypointUpdater(object):
     def traffic_cb(self, msg):
         # This is the index of the nearest upcoming red light
         # Used in pose_cb
-        self.redlightindex = msg.index;
+        self.lightindex = msg.index;
+        self.lightstate = msg.state;
 
-        if msg.state == TrafficWaypoint.RED:
-            state = "red"
-        elif msg.state == TrafficWaypoint.YELLOW:
-            state = "yellow"
-        elif msg.state == TrafficWaypoint.GREEN:
-            state = "green"
-        else:
-            state = "unknown"
-
+        #if msg.state == TrafficWaypoint.RED:
+        #    state = "red"
+        #elif msg.state == TrafficWaypoint.YELLOW:
+        #    state = "yellow"
+        #elif msg.state == TrafficWaypoint.GREEN:
+        #    state = "green"
+        #else:
+        #    state = "unknown"
         #rospy.logwarn('traffic light; waypoint: {}; state: {}'.format(msg.index, state))
 
     def obstacle_cb(self, msg):
