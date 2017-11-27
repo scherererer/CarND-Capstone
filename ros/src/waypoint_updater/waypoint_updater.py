@@ -23,6 +23,7 @@ TODO (for Yousuf and Aaron): Stopline location for each traffic light.
 '''
 
 LOOKAHEAD_WPS = 200 # Number of waypoints we will publish. You can change this number
+FLOAT_EPSILON = 0.00001;
 
 
 def angleDiff(a, b):
@@ -93,16 +94,16 @@ class WaypointUpdater(object):
             distanceToDest = self.distance(self.base_waypoints, startwpindex, self.lightindex);
             targetVelocity = 0.0;
 
-        idealAccel = (targetVelocity**2 - self.lastvelocity**2) / (2 * distanceToDest);
+        idealAccel = (targetVelocity**2 - self.lastvelocity**2) / (2 * distanceToDest) if (math.fabs(distanceToDest) > FLOAT_EPSILON) else 0.0;
 
         v = self.lastvelocity;
-        dt = ((targetVelocity - self.lastvelocity) / idealAccel) / numwpts;
+        dt = ((targetVelocity - self.lastvelocity) / idealAccel) / numwpts if (math.fabs(idealAccel) > FLOAT_EPSILON and numwpts > 0) else 1.0;
 
         for i in range(len(lane.waypoints)):
             v += idealAccel * dt;
             self.set_waypoint_velocity(lane.waypoints, i, v);
 
-        rospy.logwarn('pose; v0 {}, vt {}, v_0 {}'.format(self.lastvelocity, targetVelocity, self.get_waypoint_velocity(lane.waypoints[0])))
+        rospy.logwarn('pose; self.lightstate {}, v0 {}, vt {}, v_0 {}'.format(self.lightstate, self.lastvelocity, targetVelocity, self.get_waypoint_velocity(lane.waypoints[0])))
 
         self.final_waypoints_pub.publish(lane);
 
