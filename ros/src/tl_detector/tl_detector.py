@@ -46,6 +46,7 @@ class Detector(object):
 
         self.state = TrafficLight.UNKNOWN
         self.state_count = 0
+        self.last_stop_line = None
 
     def loop(self):
         rate = rospy.Rate(10)
@@ -64,7 +65,10 @@ class Detector(object):
             if self.state != state:
                 self.state_count = 0
                 self.state = state
-            elif self.state_count == STATE_COUNT_THRESHOLD:
+            elif self.state_count == STATE_COUNT_THRESHOLD \
+                    or self.state_count > STATE_COUNT_THRESHOLD \
+                    and self.last_stop_line != stop_line:
+                self.last_stop_line = stop_line
                 tw = TrafficWaypoint(stop_line, state)
                 self.pub.publish(tw)
 
