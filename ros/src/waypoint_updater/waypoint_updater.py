@@ -22,7 +22,7 @@ as well as to verify your TL classifier.
 TODO (for Yousuf and Aaron): Stopline location for each traffic light.
 '''
 
-LOOKAHEAD_WPS = 200 # Number of waypoints we will publish. You can change this number
+LOOKAHEAD_WPS = 100 # Number of waypoints we will publish. You can change this number
 FLOAT_EPSILON = 0.00001;
 
 
@@ -45,8 +45,6 @@ class WaypointUpdater(object):
         rospy.Subscriber('/base_waypoints', Lane, self.waypoints_cb)
 
         sub1 = rospy.Subscriber("/traffic_waypoint", TrafficWaypoint, self.traffic_cb)
-        # Cruft?
-        #sub1 = rospy.Subscriber("/obstacle_waypoint", message_type, self.obstacle_cb)
 
         self.final_waypoints_pub = rospy.Publisher('final_waypoints', Lane, queue_size=1)
 
@@ -70,6 +68,7 @@ class WaypointUpdater(object):
         lane.header = msg.header
 
         startwpindex = self.find_closest_waypoint(self.base_waypoints, msg.pose);
+        endwpindex = startwpindex;
 
         for i in range (LOOKAHEAD_WPS):
             lane.waypoints.append (self.base_waypoints[(startwpindex + i) % len(self.base_waypoints)]);
@@ -78,21 +77,39 @@ class WaypointUpdater(object):
 
         distanceToDest = 0;
         targetVelocity = 0;
-        numwpts = self.lightindex - startwpindex if startwpindex <= self.lightindex else self.lightindex + len(self.base_waypoints) - startwpindex;
 
-        if (self.lightindex < 0 or self.lightstate == TrafficWaypoint.GREEN):
+        failedToDetectLight = (self.lightindex < 0);
+
+        if (failedToDetectLight):
+            numwpts = LOOKAHEAD_WPS;
+        elif (startwpindex <= self.lightindex):
+            numwpts = self.lightindex - startwpindex
+        else:
+            numwpts = self.lightindex + len(self.base_waypoints) - startwpindex;
+
+        if ((numwpts > LOOKAHEAD_WPS) or (failedToDetectLight) or (self.lightstate == TrafficWaypoint.GREEN)):
             # Top Speed!
-            distanceToDest = self.distance(self.base_waypoints, startwpindex,
-                                           (startwpindex + 100) % len(self.base_waypoints));
+            #rospy.logwarn ('Going {} {} {} {} {} {}'.format (
+            #    (numwpts > LOOKAHEAD_WPS), (failedToDetectLight),
+            #    (self.lightstate == TrafficWaypoint.GREEN), numwpts, startwpindex,
+            #    self.lightindex));
+
+            numwpts = LOOKAHEAD_WPS;
+            endwpindex = (startwpindex + numwpts) % len(self.base_waypoints)
+            distanceToDest = self.distance(self.base_waypoints, startwpindex, endwpindex);
             targetVelocity = SPEED_LIMIT;
-        elif (numwpts < LOOKAHEAD_WPS and self.lightstate == TrafficWaypoint.RED):
+        elif (self.lightstate == TrafficWaypoint.RED):
             # Account for slowdown
-            distanceToDest = self.distance(self.base_waypoints, startwpindex, self.lightindex);
+            endwpindex = self.lightindex;
+            distanceToDest = self.distance(self.base_waypoints, startwpindex, endwpindex);
             targetVelocity = 0.0;
+            #rospy.logwarn ('Red {}'.format (self.lightstate == TrafficWaypoint.RED));
         else:
             # TODO: Allow running through a yellow light as long as it doesn't cause an abrupt stop
-            distanceToDest = self.distance(self.base_waypoints, startwpindex, self.lightindex);
+            endwpindex = self.lightindex;
+            distanceToDest = self.distance(self.base_waypoints, startwpindex, endwpindex);
             targetVelocity = 0.0;
+            #rospy.logwarn ('Yellow {}'.format (self.lightstate == TrafficWaypoint.YELLOW));
 
         idealAccel = (targetVelocity**2 - self.lastvelocity**2) / (2 * distanceToDest) if (math.fabs(distanceToDest) > FLOAT_EPSILON) else 0.0;
 
@@ -100,10 +117,16 @@ class WaypointUpdater(object):
         dt = ((targetVelocity - self.lastvelocity) / idealAccel) / numwpts if (math.fabs(idealAccel) > FLOAT_EPSILON and numwpts > 0) else 1.0;
 
         for i in range(len(lane.waypoints)):
-            v += idealAccel * dt;
+            if (i < numwpts):
+                v += idealAccel * dt;
             self.set_waypoint_velocity(lane.waypoints, i, v);
+            #if (i == numwpts - 1):
+            #    rospy.logwarn ('a {} end_v {}'.format (idealAccel, v));
 
-        rospy.logwarn('pose; self.lightstate {}, v0 {}, vt {}, v_0 {}'.format(self.lightstate, self.lastvelocity, targetVelocity, self.get_waypoint_velocity(lane.waypoints[0])))
+        #rospy.logwarn('pose; self.lightstate {}, {} dd {}, a {}, dt {}, v0 {}, vt {}, v_0 {}'.format(
+        #               self.lightstate, numwpts, distanceToDest, idealAccel, dt,
+        #               self.lastvelocity, targetVelocity,
+        #               self.get_waypoint_velocity(lane.waypoints[0])))
 
         self.final_waypoints_pub.publish(lane);
 
@@ -127,7 +150,7 @@ class WaypointUpdater(object):
         #    state = "green"
         #else:
         #    state = "unknown"
-        #rospy.logwarn('traffic light; waypoint: {}; state: {}'.format(msg.index, state))
+        #rospy.logdebug('traffic light; waypoint: {}; state: {}'.format(msg.index, state))
 
     def obstacle_cb(self, msg):
         # TODO: Callback for /obstacle_waypoint message. We will implement it later
