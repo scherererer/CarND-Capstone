@@ -203,7 +203,7 @@ class DummyDetector(Detector):
 
         dist = distance(self.waypoints[tl_index],
                         self.waypoints[self.car_index])
-        if dist > 75:
+        if dist > 150:
             return TrafficLight.UNKNOWN
 
         return self.traffic_lights[self.tl_map[tl_index]].state
