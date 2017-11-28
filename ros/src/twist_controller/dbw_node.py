@@ -47,9 +47,9 @@ class DBWNode(object):
         max_steer_angle = rospy.get_param('~max_steer_angle', 8.)
         
         # Tuning time!
-        kp = 0.0632701      * 4
+        kp = 0.0632701      * 16
         ki = 0.00097335     * 4
-        kd = 3.68445        * 4
+        kd = 3.68445        * 8
         max_speed = 80
 
         self.steer_pub = rospy.Publisher('/vehicle/steering_cmd',
@@ -60,7 +60,8 @@ class DBWNode(object):
                                          BrakeCmd, queue_size=1)
 
         # self.controller = TwistController(<Arguments you wish to provide>)
-        self.controller = Controller(wheel_base, steer_ratio, 10, max_lat_accel, max_steer_angle, kp, ki, kd, max_speed)
+        self.controller = Controller(wheel_base, steer_ratio, 0, max_lat_accel,
+                                     max_steer_angle, kp, ki, kd, max_speed, vehicle_mass, accel_limit, decel_limit)
 
         # TODO: Subscribe to all the topics you need to
         

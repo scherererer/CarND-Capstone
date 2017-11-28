@@ -7,9 +7,9 @@ ONE_MPH = 0.44704
 
 
 class Controller(object):
-    def __init__(self, wheel_base, steer_ratio, min_speed, max_lat_accel, max_steer_angle, kp, ki, kd, max_speed):
+    def __init__(self, wheel_base, steer_ratio, min_speed, max_lat_accel, max_steer_angle, kp, ki, kd, max_speed, vehicle_mass, accel_limit, decel_limit):
         self.yawc = YawController(wheel_base, steer_ratio, min_speed, max_lat_accel, max_steer_angle)
-        self.pidc = PID(kp, ki, kd, -1, 1)
+        self.pidc = PID(kp, ki, kd, decel_limit, accel_limit)
 
     def control(self, command_twist, current_twist, dt):
         cmd_vel = command_twist.twist.linear.x
@@ -19,7 +19,7 @@ class Controller(object):
         # TODO: Change the arg, kwarg list to suit your needs
         # Return throttle, brake, steer
         
-        vel_err = cmd_vel - current_vel;
+        vel_err = cmd_vel - current_vel
         
         if current_vel > 80:
             vel_err *= 2
