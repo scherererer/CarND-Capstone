@@ -139,6 +139,7 @@ class Detector(object):
 
 class ImageDetector(Detector):
     def __init__(self):
+        variant = rospy.get_param('variant')
         config_string = rospy.get_param('/traffic_light_config')
         camera_info = yaml.load(config_string)['camera_info']
         
@@ -147,7 +148,7 @@ class ImageDetector(Detector):
         self.camera_image = None
 
         self.bridge = CvBridge()
-        self.light_classifier = TLClassifier(camera_info['image_width'],
+        self.light_classifier = TLClassifier(variant, camera_info['image_width'],
                                              camera_info['image_height'])
 
         rospy.Subscriber('/image_color', Image, self.image_cb)
@@ -215,7 +216,8 @@ class DummyDetector(Detector):
 
 if __name__ == '__main__':
     try:
-        if rospy.get_param("/traffic_light_detector") == "dummy":
+        if rospy.has_param('/dummy_traffic_light_detector') \
+           and rospy.get_param('/dummy_traffic_light_detector'):
             detector = DummyDetector()
         else:
             detector = ImageDetector()
