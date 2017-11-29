@@ -5,6 +5,8 @@ import tf
 from geometry_msgs.msg import PoseStamped, TwistStamped
 from styx_msgs.msg import Lane, TrafficWaypoint, Waypoint
 
+from enum import Enum
+
 import math
 
 '''
@@ -22,7 +24,7 @@ as well as to verify your TL classifier.
 TODO (for Yousuf and Aaron): Stopline location for each traffic light.
 '''
 
-LOOKAHEAD_WPS = 100 # Number of waypoints we will publish. You can change this number
+LOOKAHEAD_WPS = 200 # Number of waypoints we will publish. You can change this number
 FLOAT_EPSILON = 0.00001;
 
 
@@ -37,6 +39,11 @@ def angleDiff(a, b):
 
 
 class WaypointUpdater(object):
+
+    class State(Enum):
+        STOP = 0
+        GO = 1
+
     def __init__(self):
         rospy.init_node('waypoint_updater', log_level=rospy.DEBUG)
 
@@ -56,79 +63,92 @@ class WaypointUpdater(object):
 
         self.lastvelocity = 0;
 
+        self.state = WaypointUpdater.State.STOP;
+
+        self.SPEED_LIMIT = 0;
+
         rospy.spin()
+
+    def update_state(self):
+        if (self.state == WaypointUpdater.State.GO):
+            if (self.lightstate == TrafficWaypoint.RED):
+                self.state = WaypointUpdater.State.STOP;
+            elif (self.lightstate == TrafficWaypoint.YELLOW):
+                # TODO: allow running a yellow
+                self.state = WaypointUpdater.State.STOP;
+
+        elif (self.state == WaypointUpdater.State.STOP):
+            failedToDetectLight = (self.lightindex < 0);
+            lightIsGreen = (self.lightstate == TrafficWaypoint.GREEN);
+
+            if (failedToDetectLight or lightIsGreen):
+                self.state = WaypointUpdater.State.GO;
+
+        else:
+            assert(False); # Unknown state
+
+    def execute_state(self, lane, numwpts):
+        if (self.state == WaypointUpdater.State.GO):
+            self.execute_state_go(lane);
+        elif (self.state == WaypointUpdater.State.STOP):
+            self.execute_state_stop(lane, numwpts);
+
+    def execute_state_go(self, lane):
+        self.final_waypoints_pub.publish(lane);
+
+    def execute_state_stop(self, lane, numwpts):
+        v = 0.0;
+        a = .1;
+
+        # Set velocity for everything after the line to 0
+        for i in range(0, LOOKAHEAD_WPS):
+            self.set_waypoint_velocity(lane.waypoints, i, 0.0);
+        # Ramp down the velocity for everything leading up to the line
+        for i in range(numwpts-1, -1, -1):
+            if (i < len(lane.waypoints)):
+                self.set_waypoint_velocity(lane.waypoints, i, v);
+
+            v += a;
+
+            if (v > self.SPEED_LIMIT):
+                v = self.SPEED_LIMIT;
+
+        self.final_waypoints_pub.publish(lane);
 
     def pose_cb(self, msg):
         '''
         :param msg: Current position of the vehicle of type PoseStamped
         '''
+
         lane = Lane();
 
         # Pass through the header info
         lane.header = msg.header
 
         startwpindex = self.find_closest_waypoint(self.base_waypoints, msg.pose);
-        endwpindex = startwpindex;
+
+        self.SPEED_LIMIT = rospy.get_param("/waypoint_loader/velocity");
 
         for i in range (LOOKAHEAD_WPS):
             lane.waypoints.append (self.base_waypoints[(startwpindex + i) % len(self.base_waypoints)]);
+            self.set_waypoint_velocity(lane.waypoints, i, self.SPEED_LIMIT);
 
-        SPEED_LIMIT = rospy.get_param("/waypoint_loader/velocity");
+        numwpts = 0;
 
-        distanceToDest = 0;
-        targetVelocity = 0;
-
-        failedToDetectLight = (self.lightindex < 0);
-
-        if (failedToDetectLight):
+        if (self.lightindex < 0):
             numwpts = LOOKAHEAD_WPS;
         elif (startwpindex <= self.lightindex):
-            numwpts = self.lightindex - startwpindex
+            numwpts = self.lightindex - startwpindex;
         else:
             numwpts = self.lightindex + len(self.base_waypoints) - startwpindex;
 
-        if ((numwpts > LOOKAHEAD_WPS) or (failedToDetectLight) or (self.lightstate == TrafficWaypoint.GREEN)):
-            # Top Speed!
-            #rospy.logwarn ('Going {} {} {} {} {} {}'.format (
-            #    (numwpts > LOOKAHEAD_WPS), (failedToDetectLight),
-            #    (self.lightstate == TrafficWaypoint.GREEN), numwpts, startwpindex,
-            #    self.lightindex));
+        self.update_state();
+        self.execute_state(lane, numwpts);
 
-            numwpts = LOOKAHEAD_WPS;
-            endwpindex = (startwpindex + numwpts) % len(self.base_waypoints)
-            distanceToDest = self.distance(self.base_waypoints, startwpindex, endwpindex);
-            targetVelocity = SPEED_LIMIT;
-        elif (self.lightstate == TrafficWaypoint.RED):
-            # Account for slowdown
-            endwpindex = self.lightindex;
-            distanceToDest = self.distance(self.base_waypoints, startwpindex, endwpindex);
-            targetVelocity = 0.0;
-            #rospy.logwarn ('Red {}'.format (self.lightstate == TrafficWaypoint.RED));
-        else:
-            # TODO: Allow running through a yellow light as long as it doesn't cause an abrupt stop
-            endwpindex = self.lightindex;
-            distanceToDest = self.distance(self.base_waypoints, startwpindex, endwpindex);
-            targetVelocity = 0.0;
-            #rospy.logwarn ('Yellow {}'.format (self.lightstate == TrafficWaypoint.YELLOW));
-
-        idealAccel = (targetVelocity**2 - self.lastvelocity**2) / (2 * distanceToDest) if (math.fabs(distanceToDest) > FLOAT_EPSILON) else 0.0;
-
-        v = self.lastvelocity;
-        dt = ((targetVelocity - self.lastvelocity) / idealAccel) / numwpts if (math.fabs(idealAccel) > FLOAT_EPSILON and numwpts > 0) else 1.0;
-
-        for i in range(len(lane.waypoints)):
-            if (i < numwpts):
-                v += idealAccel * dt;
-            self.set_waypoint_velocity(lane.waypoints, i, v);
-            #if (i == numwpts - 1):
-            #    rospy.logwarn ('a {} end_v {}'.format (idealAccel, v));
-
-        #rospy.logwarn('pose; self.lightstate {}, {} dd {}, a {}, dt {}, v0 {}, vt {}, v_0 {}'.format(
-        #               self.lightstate, numwpts, distanceToDest, idealAccel, dt,
-        #               self.lastvelocity, targetVelocity,
-        #               self.get_waypoint_velocity(lane.waypoints[0])))
-
-        self.final_waypoints_pub.publish(lane);
+        #rospy.logwarn('state {} v0 {:+6.3f} numwpts {} start {} end {}'.format(
+        #    self.state, self.get_waypoint_velocity(lane.waypoints[0]),
+        #    numwpts, startwpindex, self.lightindex))
+        return;
 
     def twist_cb(self, msg):
         self.lastvelocity = msg.twist.linear.x;
