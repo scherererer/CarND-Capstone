@@ -139,12 +139,16 @@ class Detector(object):
 
 class ImageDetector(Detector):
     def __init__(self):
+        config_string = rospy.get_param('/traffic_light_config')
+        camera_info = yaml.load(config_string)['camera_info']
+        
         super(ImageDetector, self).__init__()
 
         self.camera_image = None
 
         self.bridge = CvBridge()
-        self.light_classifier = TLClassifier()
+        self.light_classifier = TLClassifier(camera_info['image_width'],
+                                             camera_info['image_height'])
 
         rospy.Subscriber('/image_color', Image, self.image_cb)
 

@@ -52,7 +52,7 @@ def download_model():
 
 
 class TLClassifier(object):
-    def __init__(self):
+    def __init__(self, width, height):
         graph_path, label_map_path = download_model()
 
         config = tf.ConfigProto()
@@ -74,6 +74,10 @@ class TLClassifier(object):
                 'detection_scores:0')
             self.detection_classes = graph.get_tensor_by_name(
                 'detection_classes:0')
+
+            fake_img = np.zeros((1, height, width, 3), np.uint8)
+            self.sess.run([self.detection_scores, self.detection_classes],
+                          feed_dict={self.image_tensor: fake_img})
 
         label_map = label_map_util.load_labelmap(label_map_path)
         categories = label_map_util.convert_label_map_to_categories(
