@@ -19,28 +19,28 @@ class Controller(object):
         current_steer = current_twist.twist.angular.z
         # TODO: Change the arg, kwarg list to suit your needs
         # Return throttle, brake, steer
-        
-        vel_err = cmd_vel - current_vel
-        
+
+        vel_err = (cmd_vel - current_vel)
+
         if current_vel > 80:
             vel_err *= 2
-        
+
         accel = self.pidc.step(vel_err, dt)
         steer = self.yawc.get_steering(current_vel, cmd_steer, current_vel)
-        
+
         # steer = self.low_pass.filt(steer)
-        
+
         #rospy.logwarn('curr_steer={:6.3f} cmd_steer={:6.3f} steer={:6.3f}'.format(
         #    current_steer, cmd_steer, steer))
-        
+
         #rospy.logwarn('curr_vel={:+6.3f} cmd_vel={:+6.3f} err={:+6.3f} accel={:+6.3f}'.format(
         #    current_vel, cmd_vel, vel_err, accel))
-        
+
         if cmd_vel < .1:
-            return 0, 12, steer
-        
-        if (accel < 0):
-            brake_amount = -accel * 200;
+            return 0, 100, steer
+
+        if (vel_err < 0):
+            brake_amount = - vel_err * 50
             return 0, brake_amount, steer
-        
+
         return accel, 0, steer
