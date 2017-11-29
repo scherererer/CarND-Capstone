@@ -100,7 +100,7 @@ class DBWNode(object):
 
             if self.dbw:
                 throttle, brake, steer = self.controller.control(self.command, self.current_velocity, dt)
-                rospy.logwarn('T {:+6.3f}, B {:+6.3f}, S {:+6.3f}'.format(throttle,brake,steer))
+                # rospy.logwarn('T {:+6.3f}, B {:+6.3f}, S {:+6.3f}'.format(throttle,brake,steer))
                 self.publish(throttle, brake, steer)
             rate.sleep()
 
