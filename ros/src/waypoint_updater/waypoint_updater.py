@@ -98,14 +98,15 @@ class WaypointUpdater(object):
 
     def execute_state_stop(self, lane, numwpts):
         v = 0.0;
-        a = .4;
+        a = .1;
 
         # Set velocity for everything after the line to 0
-        for i in range(min(numwpts, LOOKAHEAD_WPS), LOOKAHEAD_WPS):
+        for i in range(0, LOOKAHEAD_WPS):
             self.set_waypoint_velocity(lane.waypoints, i, 0.0);
         # Ramp down the velocity for everything leading up to the line
-        for i in range(min(numwpts-1, LOOKAHEAD_WPS)-1, -1, -1):
-            self.set_waypoint_velocity(lane.waypoints, i, v);
+        for i in range(numwpts-1, -1, -1):
+            if (i < len(lane.waypoints)):
+                self.set_waypoint_velocity(lane.waypoints, i, v);
 
             v += a;
 

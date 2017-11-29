@@ -1,5 +1,6 @@
 from yaw_controller import *
 from pid import *
+from acc_pid import *
 import rospy
 
 GAS_DENSITY = 2.858
@@ -9,7 +10,7 @@ ONE_MPH = 0.44704
 class Controller(object):
     def __init__(self, wheel_base, steer_ratio, min_speed, max_lat_accel, max_steer_angle, kp, ki, kd, max_speed):
         self.yawc = YawController(wheel_base, steer_ratio, min_speed, max_lat_accel, max_steer_angle)
-        self.pidc = PID(kp, ki, kd, -1, 1)
+        self.pidc = AccumulatingPID(kp, ki, kd, -1, 1)
 
     def control(self, command_twist, current_twist, dt):
         cmd_vel = command_twist.twist.linear.x
@@ -35,7 +36,7 @@ class Controller(object):
         
         
         if (accel < 0):
-            brake_amount = -accel
+            brake_amount = -accel * 200;
             return 0, brake_amount, steer
         else:
             return accel, 0, steer
