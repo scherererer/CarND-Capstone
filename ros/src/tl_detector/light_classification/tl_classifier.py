@@ -14,26 +14,26 @@ sys.path.append(os.path.dirname(__file__))
 from object_detection.utils import label_map_util  # isort:skip
 
 THRESHOLD = 0.5
-SIM_MODEL_URL = 'https://github.com/TeenageMutantNinjaTurtlesAllTheWayDown/CarND-Capstone/releases/download/sim-model/model.tar'
-SIM_MODEL_SHA256 = '163dab039fa98fd48adc95627fc2a7e7d44686246ff263b4eb7a8ea89bcc8feb'
+MODEL_URL = 'https://github.com/TeenageMutantNinjaTurtlesAllTheWayDown/CarND-Capstone/releases/download/model/model.tar'
+MODEL_SHA256 = '02da06bf05e1d38a50b2052a5518d78a7c9f161f72b912be9d42186fef033853'
 
 
-def download_model():
+def download_model(variant):
     dir = os.path.dirname(__file__)
     archive_path = os.path.join(dir, 'model.tar')
     model_dir = os.path.join(dir, 'model')
-    graph_path = os.path.join(model_dir, 'graph.pb')
-    label_map_path = os.path.join(model_dir, 'label_map.pbtxt')
+    graph_path = os.path.join(model_dir, variant, 'graph.pb')
+    label_map_path = os.path.join(model_dir, variant, 'label_map.pbtxt')
 
     if os.path.exists(graph_path):
         return graph_path, label_map_path
 
     rospy.logwarn('Downloading model...')
 
-    for i in range(1):
-        urllib.urlretrieve(SIM_MODEL_URL, archive_path)
+    for i in range(3):
+        urllib.urlretrieve(MODEL_URL, archive_path)
         digest = hashlib.sha256(open(archive_path, 'rb').read()).hexdigest()
-        if digest != SIM_MODEL_SHA256:
+        if digest != MODEL_SHA256:
             os.remove(archive_path)
         else:
             break
@@ -52,8 +52,9 @@ def download_model():
 
 
 class TLClassifier(object):
-    def __init__(self, width, height):
-        graph_path, label_map_path = download_model()
+    def __init__(self, variant, width, height):
+        graph_path, label_map_path = download_model(variant)
+        rospy.logwarn(graph_path)
 
         config = tf.ConfigProto()
         config.gpu_options.allow_growth = True
