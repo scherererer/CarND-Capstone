@@ -78,6 +78,9 @@ class Detector(object):
         if self.waypoints is None:
             return
 
+        if self.car_index > self.stop_lines[-1]:
+            self.car_index = 0
+
         current_dist = distance(msg.pose.position,
                                 self.waypoints[self.car_index])
 
