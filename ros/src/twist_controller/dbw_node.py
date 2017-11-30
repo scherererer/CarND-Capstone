@@ -45,10 +45,10 @@ class DBWNode(object):
         steer_ratio = rospy.get_param('~steer_ratio', 14.8)
         max_lat_accel = rospy.get_param('~max_lat_accel', 3.)
         max_steer_angle = rospy.get_param('~max_steer_angle', 8.)
-        
+
         # Tuning time!
         kp = 0.01;#0.0632701      * 4
-        ki = 0.0;#0.00097335     * 4
+        kp_neg = 0.05;#0.00097335     * 4
         kd = 0.01;#3.68445        * 4
         max_speed = 80
 
@@ -61,10 +61,9 @@ class DBWNode(object):
 
         # self.controller = TwistController(<Arguments you wish to provide>)
         self.controller = Controller(wheel_base, steer_ratio, 10, max_lat_accel,
-                                     max_steer_angle, kp, ki, kd, max_speed, vehicle_mass, accel_limit, decel_limit)
+                                     max_steer_angle, kp, kp_neg, kd, max_speed, vehicle_mass, accel_limit, decel_limit)
 
         # TODO: Subscribe to all the topics you need to
-        
         self.dbw_sub = rospy.Subscriber('/vehicle/dbw_enabled', Bool, self.dbw_changed)
         self.twist_sub = rospy.Subscriber('/twist_cmd', TwistStamped, self.twist_command)
         self.current_vel_sub = rospy.Subscriber('/current_velocity', TwistStamped, self.current_velocity_update)
@@ -74,10 +73,10 @@ class DBWNode(object):
     def dbw_changed(self, new_dbw):
         rospy.logwarn('Self-Driving {}'.format('Enabled' if new_dbw.data else 'Disabled'))
         self.dbw = new_dbw.data
-    
+
     def twist_command(self, new_command):
         self.command = new_command
-    
+
     def current_velocity_update(self, current_velocity):
         self.current_velocity = current_velocity
 
@@ -92,7 +91,7 @@ class DBWNode(object):
             #                                                     <current linear velocity>,
             #                                                     <dbw status>,
             #                                                     <any other argument you need>)
-            
+
             # Find dt
             current_time = rospy.get_time()
             dt = current_time - last_time
@@ -102,6 +101,8 @@ class DBWNode(object):
                 throttle, brake, steer = self.controller.control(self.command, self.current_velocity, dt)
                 # rospy.logwarn('T {:+6.3f}, B {:+6.3f}, S {:+6.3f}'.format(throttle,brake,steer))
                 self.publish(throttle, brake, steer)
+            else:
+                self.controller.reset();
             rate.sleep()
 
     def publish(self, throttle, brake, steer):

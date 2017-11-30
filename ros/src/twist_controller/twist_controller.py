@@ -36,11 +36,15 @@ class Controller(object):
         #rospy.logwarn('curr_vel={:+6.3f} cmd_vel={:+6.3f} err={:+6.3f} accel={:+6.3f}'.format(
         #    current_vel, cmd_vel, vel_err, accel))
 
-        if cmd_vel < .1:
-            return 0, 100, steer
+        #if cmd_vel < .1:
+        #    return 0, 100, steer
 
-        if (vel_err < 0):
-            brake_amount = - vel_err * 50
+        #if (vel_err < 0):
+        if (accel <= 0):
+            brake_amount = -accel * 200
             return 0, brake_amount, steer
 
         return accel, 0, steer
+
+    def reset(self):
+        self.pidc.reset();
