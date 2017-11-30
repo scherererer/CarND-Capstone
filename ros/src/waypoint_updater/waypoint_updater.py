@@ -24,8 +24,9 @@ as well as to verify your TL classifier.
 TODO (for Yousuf and Aaron): Stopline location for each traffic light.
 '''
 
-LOOKAHEAD_WPS = 200 # Number of waypoints we will publish. You can change this number
+LOOKAHEAD_WPS = 200; # Number of waypoints we will publish. You can change this number
 FLOAT_EPSILON = 0.00001;
+MIN_STOP_TIME = 1;
 
 
 def angleDiff(a, b):
@@ -61,7 +62,7 @@ class WaypointUpdater(object):
         self.lightindex = -1;
         self.lightstate = TrafficWaypoint.UNKNOWN;
 
-        self.lastvelocity = 0;
+        self.last_velocity = 0;
 
         self.state = WaypointUpdater.State.STOP;
 
@@ -69,16 +70,20 @@ class WaypointUpdater(object):
 
         rospy.spin()
 
-    def update_state(self):
+    def update_state(self, distanceToLight):
+        failedToDetectLight = (self.lightindex < 0);
+
         if (self.state == WaypointUpdater.State.GO):
-            if (self.lightstate == TrafficWaypoint.RED):
+            if (failedToDetectLight):
+                pass;
+            elif (self.lightstate == TrafficWaypoint.RED):
                 self.state = WaypointUpdater.State.STOP;
             elif (self.lightstate == TrafficWaypoint.YELLOW):
-                # TODO: allow running a yellow
-                self.state = WaypointUpdater.State.STOP;
+                # Go to stop if we have enough time to stop
+                if (distanceToLight / self.last_velocity > MIN_STOP_TIME):
+                    self.state = WaypointUpdater.State.STOP;
 
         elif (self.state == WaypointUpdater.State.STOP):
-            failedToDetectLight = (self.lightindex < 0);
             lightIsGreen = (self.lightstate == TrafficWaypoint.GREEN);
 
             if (failedToDetectLight or lightIsGreen):
@@ -134,15 +139,19 @@ class WaypointUpdater(object):
             self.set_waypoint_velocity(lane.waypoints, i, self.SPEED_LIMIT);
 
         numwpts = 0;
+        distanceToLight = 0;
 
         if (self.lightindex < 0):
             numwpts = LOOKAHEAD_WPS;
+            distanceToLight = 10000;
         elif (startwpindex <= self.lightindex):
             numwpts = self.lightindex - startwpindex;
+            distanceToLight = self.distance(lane.waypoints, 0, min(LOOKAHEAD_WPS, numwpts)-1);
         else:
             numwpts = self.lightindex + len(self.base_waypoints) - startwpindex;
+            distanceToLight = self.distance(lane.waypoints, 0, min(LOOKAHEAD_WPS, numwpts)-1);
 
-        self.update_state();
+        self.update_state(distanceToLight);
         self.execute_state(lane, numwpts);
 
         #rospy.logwarn('state {} v0 {:+6.3f} numwpts {} start {} end {}'.format(
@@ -151,7 +160,7 @@ class WaypointUpdater(object):
         return;
 
     def twist_cb(self, msg):
-        self.lastvelocity = msg.twist.linear.x;
+        self.last_velocity = msg.twist.linear.x;
 
     def waypoints_cb(self, waypoints):
         self.base_waypoints = waypoints.waypoints;
