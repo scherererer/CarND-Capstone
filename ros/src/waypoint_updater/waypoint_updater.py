@@ -80,7 +80,8 @@ class WaypointUpdater(object):
                 self.state = WaypointUpdater.State.STOP;
             elif (self.lightstate == TrafficWaypoint.YELLOW):
                 # Go to stop if we have enough time to stop
-                if (distanceToLight / self.last_velocity > MIN_STOP_TIME):
+                if ((abs(self.last_velocity) < FLOAT_EPSILON) or
+                    (distanceToLight / self.last_velocity > MIN_STOP_TIME)):
                     self.state = WaypointUpdater.State.STOP;
 
         elif (self.state == WaypointUpdater.State.STOP):
