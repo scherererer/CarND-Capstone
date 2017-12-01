@@ -17,7 +17,6 @@ import numpy as np
 from PIL import Image as PIL_Image
 from io import BytesIO
 import base64
-
 import math
 
 TYPE = {
@@ -176,7 +175,6 @@ class Bridge(object):
         imgString = data["image"]
         image = PIL_Image.open(BytesIO(base64.b64decode(imgString)))
         image_array = np.asarray(image)
-
         image_message = self.bridge.cv2_to_imgmsg(image_array, encoding="rgb8")
         self.publishers['image'].publish(image_message)
 
